@@ -1,0 +1,145 @@
+#!/usr/bin/env python
+import rospy
+from geometry_msgs.msg import Twist, Point, Quaternion
+import tf
+from math import radians, copysign, sqrt, pow, pi, atan2,cos,sin
+from tf.transformations import euler_from_quaternion
+import numpy as np
+from sensor_msgs.msg import LaserScan
+
+
+class obstacle_avoidance():
+    def __init__(self): 
+        rospy.init_node('avoidance', anonymous=False)
+        #turtlebot3_model = rospy.get_param("model")
+
+        rospy.on_shutdown(self.shutdown)
+        self.cmd_vel = rospy.Publisher('cmd_vel', Twist, queue_size=10)
+        # self.tb_leader_positon=rospy.Publisher('/tb_leader_pos',Point,queue_size=10)
+        # self.tb_leader_vel=rospy.Publisher('/tb_leader_vel',Twist,queue_size=5)#5
+        position = Point()
+        move_cmd = Twist()
+        global r
+        r = rospy.Rate(10)
+        self.tf_listener = tf.TransformListener()
+        self.odom_frame = '/avoidance/odom'
+        # rospy.sleep(0.02)
+        try:
+            self.tf_listener.waitForTransform(self.odom_frame, '/avoidance/base_footprint', rospy.Time(), rospy.Duration(1.0))
+            self.base_frame = '/avoidance/base_footprint'
+        except (tf.Exception, tf.ConnectivityException, tf.LookupException):
+            try:
+                self.tf_listener.waitForTransform(self.odom_frame, '/avoidance/base_link', rospy.Time(), rospy.Duration(1.0))
+                self.base_frame = '/avoidance/base_link'
+            except (tf.Exception, tf.ConnectivityException, tf.LookupException):
+                rospy.loginfo("Cannot find transform between odom and base_link or base_footprint")
+                rospy.signal_shutdown("tf Exception")
+
+        (position, rotation) = self.get_odom()
+
+        
+        # self.tb_leader_positon.publish(position)
+        tb_leader_pos=position
+        obstacle_position=Point()
+        # print 1
+        obstacle_position=self.lidar(position)
+        # print position
+        print obstacle_position
+        # print 2
+        tb_leader_vel.angular.z=self.compute_vel(obstacle_position)
+        tb_leader_vel.angular.z=0
+
+        tb_leader_vel.linear.x=0.0
+
+
+
+        # print ('leader send x:%f y:%f'%(position.x,position.y))
+        self.cmd_vel.publish(tb_leader_vel)
+        # self.tb_leader_vel.publish(tb_leader_vel)
+
+    def lidar(self,tb_pos):
+        msg = rospy.wait_for_message("scan", LaserScan)
+        # print 1
+        detection_R=1.5
+        #R represent lidar_range#
+        protection_r=0.1
+        #r represent protection_range#
+        LIDAR_ERR = 0.05
+        LIDAR_MAX = detection_R
+        global obstacle
+        obstacle=[]
+        # print 3
+        min_dis=protection_r
+        # min_ang=0
+        min_point=Point()
+        # print 2
+        for i in range(360):
+            if i <= 45 or i > 315:
+                obstacle_pos=Point()
+                # print 3
+                if msg.ranges[i] >= LIDAR_ERR and msg.ranges[i]<=LIDAR_MAX:
+                    # print msg.ranges[i]
+                    obstacle_pos.x=tb_pos.x+msg.ranges[i]*cos(i)
+                    obstacle_pos.y=tb_pos.y+msg.ranges[i]*sin(i)
+                    obstacle.append(obstacle_pos)
+                    if msg.ranges[i] < min_dis:
+                        #if distance between robot and obstacle is smaller than r#
+                            min_dis = msg.ranges[i]
+                            min_point.x=tb_pos.x+min_dis*cos(i)
+                            min_point.y=tb_pos.y+min_dis*sin(i)
+                            min_point.z=i*2*pi/360
+                            # print i
+            if min_dis<protection_r:
+                min_point.x=tb_pos.x+min_dis*cos(min_point.z)
+                min_point.y=tb_pos.y+min_dis*sin(min_point.z)
+            else:
+                min_point.x=10
+                min_point.y=10
+                min_point.z=0
+        return min_point
+    def compute_vel(self,obstacle_position):
+      	
+
+
+    def compute_theta(self,theta,rotation1):
+        if theta*rotation1<0:
+            if theta>0:
+                if abs(rotation1)+theta<=pi:
+                    w=abs(rotation1)+theta
+                else:
+                    w=-(2*pi+rotation1-theta)
+            else:
+                if rotation1+abs(theta)<=pi:
+                    w=-(abs(theta)+rotation1)
+                else:
+                    w=(2*pi-rotation1+theta)
+        else:
+            w=theta-rotation1
+        return w
+        
+
+
+    def get_odom(self):
+        try:
+            (trans, rot) = self.tf_listener.lookupTransform(self.odom_frame, self.base_frame, rospy.Time(0))
+            rotation = euler_from_quaternion(rot)
+
+        except (tf.Exception, tf.ConnectivityException, tf.LookupException):
+            rospy.loginfo("TF Exception")
+            return
+
+        return (Point(*trans), rotation[2])
+    def shutdown(self):
+        self.cmd_vel.publish(Twist())
+        rospy.sleep(1)
+if __name__ == '__main__':
+	
+    try:
+        while not rospy.is_shutdown():
+            print(msg)
+            obstacle_avoidance()
+            # rospy.spin()
+
+    except:
+        rospy.loginfo("shutdown program.")
+
