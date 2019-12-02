@@ -1,6 +1,7 @@
 # ROS-Turtlebot
 ros python for Turtlebot, lab website: https://iwin-fins.com
-## Contributor
+## Contributors
 [Hongbo Li](https://github.com/redglassli)
 
 [Cong Liu](https://github.com/userliucon)
+
